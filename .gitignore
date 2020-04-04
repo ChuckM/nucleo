@@ -4,3 +4,4 @@
 *.elf
 *.hex
 *.a
+generated.*
