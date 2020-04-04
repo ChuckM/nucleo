@@ -3,7 +3,7 @@
 [ST Micro](https://www.st.com/en/evaluation-tools/stm32-nucleo-boards.html)
 makes an Arduino like board for many of their processors. These boards are
 branded "Nucleo" and are available for $10 - $15 at distributors like
-[Digikey](200~https://www.digikey.com/products/en/development-boards-kits-programmers/evaluation-boards-embedded-mcu-dsp/786?k=nucleo)
+[Digikey](https://www.digikey.com/products/en/development-boards-kits-programmers/evaluation-boards-embedded-mcu-dsp/786?k=nucleo)
 and
 [Mouser](https://www.mouser.com/Embedded-Solutions/Engineering-Tools/Embedded-Processor-Development-Kits/Development-Boards-Kits-ARM/_/N-cxd2t?Keyword=nucleo&FS=True).
 
