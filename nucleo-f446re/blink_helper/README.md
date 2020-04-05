@@ -1,4 +1,4 @@
-# blink\_helper
+# Blink Example #3 : Blinking with support
 
 This example shows you the use of the LED helper code. Because it isn't
 doing anything specific with the chip (other than blink the LED) it doesn't
