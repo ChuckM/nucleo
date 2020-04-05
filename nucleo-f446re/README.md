@@ -13,7 +13,7 @@ Things to note about this board:
   * The `OSC_IN` pin is fed by the 8 MHz crystal on the ST-Link portion.
   * This board runs ST-Link V2, is compatible with MBED, and exports three
     interfaces on the USB, Serial, Storage, and Debug.
-  * It is supported by (OpenOCD)[https://openocd.org] using
+  * It is supported by [OpenOCD](https://openocd.org) using
     the `st_nucleo_f4.cfg` file.
 
 The common directory has clock, LED, and serial port set up code that is common
