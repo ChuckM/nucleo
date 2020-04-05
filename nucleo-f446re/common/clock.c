@@ -28,6 +28,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 #include <libopencm3/stm32/rcc.h>
+#include <libopencm3/stm32/gpio.h>
 #include <libopencm3/stm32/pwr.h>
 #include <libopencm3/stm32/flash.h>
 #include <libopencm3/cm3/systick.h>
@@ -50,9 +51,9 @@ static const struct rcc_clock_scale nucleo_446_clk_params = {
 	.pllq = 4, /* SDIO clock is 42 MHz */
 	.pllr = 2,
 	.pll_source = RCC_CFGR_PLLSRC_HSE_CLK,
-	.ppre2 = 2,
-	.ppre1 = 4,
-	.hpre = 0,
+	.ppre2 = RCC_CFGR_PPRE_DIV_2,
+	.ppre1 = RCC_CFGR_PPRE_DIV_4,
+	.hpre = RCC_CFGR_HPRE_DIV_NONE,
 	.voltage_scale = PWR_SCALE1,
 	.flash_config = FLASH_ACR_DCEN | FLASH_ACR_ICEN |
 					FLASH_ACR_LATENCY_5WS,
@@ -82,6 +83,8 @@ systick_setup(int tick_rate)
 void
 nucleo_clock_setup(void) {
 	
+	rcc_periph_clock_enable(RCC_GPIOC);
+	gpio_mode_setup(GPIOC, GPIO_MODE_OUTPUT, GPIO_PUPD_NONE, GPIO3);
 	rcc_clock_setup_pll(&nucleo_446_clk_params);
 	systick_setup(1000);
 	return;
@@ -108,6 +111,7 @@ sys_tick_handler(void) {
 	if (delay_millis) {
 		delay_millis--;
 	}
+	gpio_toggle(GPIOC, GPIO3);
 }
 
 /* sleep for delay milliseconds */
