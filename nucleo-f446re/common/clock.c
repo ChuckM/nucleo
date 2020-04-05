@@ -62,6 +62,18 @@ static const struct rcc_clock_scale nucleo_446_clk_params = {
 	.apb2_frequency = 84000000,
 };
 
+/*
+ * This define causes code to be included that toggles the pin PC3
+ * when the SysTick interrupt is called. The purpose of that test is
+ * so that you can hook up an oscilloscope to that pin (Connector CN7,
+ * pin 37 which is the lower left corner pin if you are looking at the board
+ * with ST-Link USB connector facing up).
+ *
+ * If the clock is correctly configured, and TEST_PIN is defined, then that
+ * pin should have a 500 Hz square wave on it.
+ */
+/* #define TEST_PIN */
+
 /* Set up a timer to create 1mS ticks. */
 static void
 systick_setup(int tick_rate)
@@ -83,8 +95,11 @@ systick_setup(int tick_rate)
 void
 nucleo_clock_setup(void) {
 	
+#ifdef TEST_PIN
+	/* set up the test pin if requested */
 	rcc_periph_clock_enable(RCC_GPIOC);
 	gpio_mode_setup(GPIOC, GPIO_MODE_OUTPUT, GPIO_PUPD_NONE, GPIO3);
+#endif
 	rcc_clock_setup_pll(&nucleo_446_clk_params);
 	systick_setup(1000);
 	return;
@@ -111,7 +126,11 @@ sys_tick_handler(void) {
 	if (delay_millis) {
 		delay_millis--;
 	}
+#ifdef TEST_PIN
+	/* toggle the test pin if requested */
 	gpio_toggle(GPIOC, GPIO3);
+#endif
+
 }
 
 /* sleep for delay milliseconds */
