@@ -28,3 +28,33 @@ on board user LED and provides five APIS:
   * `void led_on(void)` -- Turn the on board LED on.
   * `void led_off(void)` -- Turn the on board LED off.
   * `int led_toggle(void)` -- Toggle the LED returning its previous state.
+
+The `uart.c` code implements the UART API. This code configures the on board
+USART so that you can communicate over the serial port that shows up when 
+you plug in the Nucleo board. I presents the following APIS:
+  * `void uart_setup(uint32_t baudrate)` -- This initializes the peripherals
+    used by the Nucleo board, configures the pins, and sets the baudrate for
+    8 bit, no parity, baudrate of your choosing communication. 
+
+    Note that if you are using `nucleo_clock_setup`, you must call that
+    _before_ you call `uart_setup` as it will change the clock speeds used
+    to calculate the baudrate delay constant.
+  * `void uart_baud(int baudrate)` -- This function changes the baudrate for
+    the UART.
+  * `void uart_putc(char c)` -- Send a character out to the UART, this waits
+    for the UART to be available so it will block if another character is
+    already being sent.
+  * `char *uart_getc(int wait)` -- This retrieves a character from the UART.
+    If the value `wait` is non-zero, the code blocks until a character is
+    available. When `wait` is zero the code will return immediately returning
+    a value of 0 if no character was available.
+  * `void uart_puts(char *message)` -- This call will seen the NUL terminated
+    string `message` out to the UART.
+  * `int uart_gets(char *buf, int len)` -- This call will collect a string
+    from the UART. It implements simple editing options and will return when
+    it reads a <CR> character (ASCII \\r). It will also return if the buffer
+    length is reached to avoid overwriting memory past the buffer.
+  * `_read()` -- This is a newlib stub that is called by the standard i/o
+    functions in the C library.
+  * `_write()` -- This is a newlib stub that is called by the standard I/O
+    functions in the C library.
