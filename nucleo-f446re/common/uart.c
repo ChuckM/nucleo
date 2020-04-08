@@ -79,9 +79,9 @@
  */
 
 #define RECV_BUF_SIZE	128		/* Arbitrary buffer size */
-char recv_buf[RECV_BUF_SIZE];
-volatile int recv_ndx_nxt;		/* Next place to store */
-volatile int recv_ndx_cur;		/* Next place to read */
+static char recv_buf[RECV_BUF_SIZE];
+static volatile int recv_ndx_nxt;		/* Next place to store */
+static volatile int recv_ndx_cur;		/* Next place to read */
 
 /* For interrupt handling we add a new function which is called
  * when recieve interrupts happen. The name (usart2_isr) is created
