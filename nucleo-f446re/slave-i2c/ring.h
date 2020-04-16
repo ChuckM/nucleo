@@ -56,4 +56,11 @@ uint8_t ringbuffer_get(ringbuffer_t *buf);
 /* Write (insert) a byte into the ringbuffer */
 void ringbuffer_put(ringbuffer_t *buf, uint8_t data);
 /* Return the number of bytes in the ringbuffer */
-uint16_t ringbuffer_bytes(ringbuffer_t *buf);
+uint16_t ringbuffer_holding(ringbuffer_t *buf);
+/* Return the space left in the ring buffer */
+uint16_t ringbuffer_available(ringbuffer_t *buf);
+/* Return total number of bytes in the ringbuffer */
+uint16_t ringbuffer_size(ringbuffer_t *buf);
+/* Flush a ring buffer (reset it to empty) */
+void ringbuffer_flush(ringbuffer_t *buf);
+

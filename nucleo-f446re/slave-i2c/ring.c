@@ -48,8 +48,37 @@ ringbuffer_get(ringbuffer_t *rb)
  * ring buffer.
  */
 uint16_t
-ringbuffer_bytes(ringbuffer_t *rb)
+ringbuffer_holding(ringbuffer_t *rb)
 {
 	return ((rb->next < rb->cur) ? (rb->next + rb->size) - rb->cur :
 									rb->next - rb->cur);
+}
+
+/*
+ * Return the number of spaces available in the ring buffer 
+ */
+uint16_t
+ringbuffer_available(ringbuffer_t *rb)
+{
+	return ( rb->size - 1 -
+				((rb->next < rb->cur) ? (rb->next + rb->size) - rb->cur :
+									rb->next - rb->cur));
+}
+
+/*
+ * Return the total bytes held by the ring buffer.
+ */
+uint16_t
+ringbuffer_size(ringbuffer_t *rb)
+{
+	return (rb->size);
+}
+
+/*
+ * Flush (or empty) a ring buffer
+ */
+void
+ringbuffer_flush(ringbuffer_t *rb)
+{
+	rb->next = rb->cur = rb->err = 0;
 }
