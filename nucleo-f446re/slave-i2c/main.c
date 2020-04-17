@@ -164,7 +164,6 @@ moveTo(int row, int col)
 int
 main(void)
 {
-	uint32_t br, bs, er, es;
 	uint8_t addr = 0x20;
 	char buf[80];
 	uint16_t membuf[MEM_REG_SIZE];
@@ -199,17 +198,24 @@ main(void)
 		test = strtold((const char *)buf, NULL);
 		switch (test) {
 			case 1:
-				br = bs = er = es = 0;
+				uart_puts(CLEAR_SCREEN);
+				moveTo(1,1);
 				printf("Waiting for data to be read or written\n");
 				while (1) {
-					if (1) {
+					if (echo->total == echo->processed) {
+						msleep(100);
 						continue;
 					}
-					moveTo(1,1);
+					echo->processed = echo->total;
+					moveTo(3,1);
 					uart_puts(CLEAR_LINE);
-					printf("Sent: %15ld(%ld)\tReceived: %15ld(%ld)\n", 
-												bs, es, br, er);
+					uart_puts("Echo handler:\n");
 					uart_puts(CLEAR_LINE);
+					printf("\tBytes Received: %15ld (%ld errors)\n", 
+						echo->bytes_recv, echo->recv_errs);
+					uart_puts(CLEAR_LINE);
+					printf("\t    Bytes Sent: %15ld (%ld errors)\n",
+						echo->bytes_sent, echo->send_errs);
 				}
 				break;
 			case 2:

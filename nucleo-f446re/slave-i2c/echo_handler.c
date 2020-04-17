@@ -138,6 +138,8 @@ echo_recv(void *s, uint8_t db)
 	if (ringbuffer_available(state->rb) == 0) {
 		state->recv_errs++;
 		return;
+	} else {
+		state->bytes_recv++;
 	}
 	ringbuffer_put(state->rb, db);
 }
@@ -172,4 +174,5 @@ echo_finish(void *s, uint8_t err)
 		state->err_count++;
 		fprintf(stderr, "Error transaction: %d\n", err);
 	} 
+	state->total++;
 }

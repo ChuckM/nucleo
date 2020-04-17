@@ -14,6 +14,8 @@ struct echo_state_t {
 	uint32_t		bytes_sent, bytes_recv;
 	uint32_t		send_errs, recv_errs;
 	uint32_t		send_count, receive_count, err_count;
+	uint32_t		total;
+	uint32_t		processed;
 };
 
 /* Prototypes */
