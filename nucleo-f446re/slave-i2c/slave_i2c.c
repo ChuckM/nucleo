@@ -42,6 +42,7 @@
 #include "ring.h"
 #include "events.h"
 #include "slave_i2c.h"
+#include "echo_handler.h"
 #include <libopencm3/stm32/rcc.h>
 #include <libopencm3/stm32/i2c.h>
 #include <libopencm3/stm32/gpio.h>
@@ -397,6 +398,9 @@ i2c1_ev_isr(void)
 	 *
 	 * If we are transmitting we set the STOP condition? (Not sure)
 	 * XXX we need to make sure we distinguish which address is active
+	 * the manual is unclear, it says DUALF is 'reset' during STOPF
+	 * but is that before or after the read of SR2? And before or
+	 * after resetting STOPF?
 	 */
 	if ((sr1 & I2C_SR1_STOPF) != 0) {
 		sr2 = I2C_SR2(I2C1);
@@ -431,8 +435,9 @@ i2c1_ev_isr(void)
 	 *
 	 * If we are receiving, read the next byte.
 	 *
-	 * If we are transmitting, send the next byte, how to stop
-	 * gracefully is not yet well understood.
+	 * XXX: This code assumes that DUALF remains in the "correct"
+	 * state. We'll have to test that.
+	 *
 	 */
 	if ((sr1 & I2C_SR1_BTF) != 0) {
 		sr2 = I2C_SR2(I2C1);
@@ -455,7 +460,6 @@ i2c1_ev_isr(void)
 	}
 }
 
-void setup_i2c(uint8_t addr, i2c_handler_t *handle);
 
 /*
  * Set up an I2C device as a slave with the passed in address.
@@ -464,7 +468,7 @@ void setup_i2c(uint8_t addr, i2c_handler_t *handle);
  * PB9 (SCL).
  */
 void
-setup_i2c(uint8_t addr, i2c_handler_t *handle)
+setup_i2c(uint8_t addr, const i2c_handler_t *handler, void *handler_state)
 {
 	int fpclk = rcc_apb1_frequency / 1000000;
 	/*
@@ -502,13 +506,12 @@ setup_i2c(uint8_t addr, i2c_handler_t *handle)
 		fprintf(stderr, "Unable to allocate handler\n");
 		return;
 	}
-	memcpy(dev[0], handle, sizeof(i2c_handler_t));
-	dev[0] = handle;
+	memcpy(dev[0], handler, sizeof(i2c_handler_t));
 	dev[0]->addr = addr;
 	dev[0]->mode = HANDLE_MODE_IDLE;
-	dev[0]->state = (*dev[0]->init)();
+	dev[0]->state = handler_state;
 	if (dev[0]->state == NULL) {
-		fprintf(stderr, "Unable to initialize handler\n");
+		fprintf(stderr, "Missing handler state\n");
 		return;
 	}
 }
@@ -607,8 +610,6 @@ moveTo(int row, int col)
 	uart_puts(move_str);
 }
 
-extern i2c_handler_t echo_handler;
-
 int
 main(void)
 {
@@ -616,10 +617,13 @@ main(void)
 	uint8_t addr = 0x20;
 	char buf[80];
 	uint16_t membuf[MEM_REG_SIZE];
+	struct echo_state_t *echo;
+
 	nucleo_clock_setup();
 	uart_setup(115200);
 	led_setup();
-	setup_i2c(addr, &echo_handler);
+	echo = echo_init(256);
+	setup_i2c(addr, &echo_handler, (void *)echo);
 	memset(&mem_reg, 0, sizeof(mem_reg));
 	memset(&reg_bank, 0, sizeof(reg_bank));
 	/* initial so they will all display originally */

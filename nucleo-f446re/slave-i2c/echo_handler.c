@@ -1,5 +1,8 @@
 /*
- * handler.c - An i2c handler system for slave devices
+ * Echo handler - An i2c handler driver for slave devices
+ *
+ * This simple handler stores bytes that are written to the device
+ * and returns them when the device is read.
  *
  * Much like USB devices, when you're the slave you don't get to drive.
  * Writing code to support that can be a bit tricky. I've chosen to
@@ -40,57 +43,38 @@
 #include <stdint.h>
 #include "ring.h"
 #include "slave_i2c.h"
+#include "echo_handler.h"
 
-//typedef struct {
-//	void	*	(*init)(void);
-//	uint8_t		(*send)(void *);
-//	void		(*recv)(void *, uint8_t db);
-//	void		(*start)(void *, uint8_t rw);
-//	void		(*stop)(void *, uint8_t err);
-//	uint16_t	addr;
-//	uint8_t		mode; 	/* IDLE, READING, WRITING */
-//	void		*state;
-//} i2c_handler_t;
+static void echo_start(void *state, uint8_t rw);
+static uint8_t echo_send(void *);
+static void echo_recv(void *state, uint8_t db);
+static void echo_finish(void *state, uint8_t err);
 
-void *echo_init(void);
-uint8_t echo_send(void *);
-void echo_recv(void *state, uint8_t db);
-void echo_start(void *state, uint8_t rw);
-void echo_stop(void *state, uint8_t err);
-
-i2c_handler_t echo_handler = {
-	.init = echo_init,
+/*
+ * Prototype handler structure for the echo
+ * device.
+ */
+const i2c_handler_t echo_handler = {
 	.send = echo_send,
 	.recv = echo_recv,
 	.start = echo_start,
-	.stop = echo_stop,
+	.stop = echo_finish,
 	.addr = 0,
 	.mode = HANDLE_MODE_IDLE,
 	.state = NULL
 };
 
+
 /*
- * Echo handler
+ * Allocate and Initialize the custom "state" structure
  *
- * This simple handler stores bytes that are written to the device
- * and returns them when the device is read.
+ * This allocates memory for it and then fills in all the
+ * pointer values.
  *
- * Note, this is dynamically allocated because that makes it "easy"
- * to have two echo responders, but mostly it also just makes the
- * code more flexible.
+ * Note: it returns NULL if any of the allocations fail.
  */
-
-#define ECHO_BUFSIZE	256
-
-struct echo_state_t {
-	ringbuffer_t	*rb;
-	uint32_t		bytes_sent, bytes_recv;
-	uint32_t		send_errs, recv_errs;
-	uint8_t			mode;
-};
-
-void *
-echo_init(void)
+struct echo_state_t *
+echo_init(uint16_t buf_size)
 {
 	struct echo_state_t *state;
 
@@ -103,18 +87,26 @@ echo_init(void)
 		free(state);
 		return NULL;
 	}
-	state->rb->buffer = calloc(ECHO_BUFSIZE, 1);
+	state->rb->buffer = calloc(buf_size, 1);
 	if (state->rb->buffer == NULL) {
 		free(state->rb);
 		free(state);
 		return NULL;
 	}
-	state->rb->size = ECHO_BUFSIZE;
+	state->rb->size = buf_size;
 	ringbuffer_flush(state->rb);
-	return (void *) state;
+	return state;
 }
 
-uint8_t
+/*
+ * Send a byte from the echo chamber to the master.
+ *
+ * The ringbuffer is FIFO so this will nominally just return
+ * what you previously sent it, caveat if you are asked to
+ * send more than you have received it sends 0xff instead and
+ * notes it as a send error.
+ */
+static uint8_t
 echo_send(void *s)
 {
 	struct echo_state_t *state = (struct echo_state_t *)(s);
@@ -130,7 +122,16 @@ echo_send(void *s)
 	return db;
 }
 
-void
+/*
+ * Receive a byte from the master and put it into the echo chamber.
+ *
+ * As noted above the ringbuffer is a FIFO. It is also limited in
+ * size set at allocation, so if you send more data than will fit before
+ * reading back from the echo chamber it starts dropping bytes on
+ * the floor (they are discarded, and receive errors are recorded
+ * in the state data.
+ */
+static void
 echo_recv(void *s, uint8_t db)
 {
 	struct echo_state_t *state = (struct echo_state_t *)(s);
@@ -141,23 +142,34 @@ echo_recv(void *s, uint8_t db)
 	ringbuffer_put(state->rb, db);
 }
 
-void
+/*
+ * Start a transaction, pretty boring it just increments the
+ * transaction count.
+ */
+static void
 echo_start(void *s, uint8_t rw)
 {
 	struct echo_state_t *state = (struct echo_state_t *)(s);
 
-	state->mode = rw;
-}
-
-void
-echo_stop(void *s, uint8_t err)
-{
-	struct echo_state_t *state = (struct echo_state_t *)(s);
-
-	state->mode = 0;
-	if (err) {
-		fprintf(stderr, "Error transaction: %d\n", err);
+	if (rw == HANDLE_MODE_RECEIVING) {
+		state->receive_count++;
+	} else {
+		state->send_count++;
 	}
 }
 
+/*
+ * Finish a transaction 
+ *
+ * If there was an error make a note of it.
+ */
+static void
+echo_finish(void *s, uint8_t err)
+{
+	struct echo_state_t *state = (struct echo_state_t *)(s);
 
+	if (err) {
+		state->err_count++;
+		fprintf(stderr, "Error transaction: %d\n", err);
+	} 
+}

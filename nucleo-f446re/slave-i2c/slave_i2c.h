@@ -6,7 +6,6 @@
 #include <stdint.h>
 
 typedef struct {
-	void	*	(*init)(void);
 	uint8_t		(*send)(void *);
 	void		(*recv)(void *, uint8_t db);
 	void		(*start)(void *, uint8_t rw);
@@ -19,3 +18,5 @@ typedef struct {
 #define HANDLE_MODE_IDLE		0
 #define HANDLE_MODE_SENDING		1
 #define HANDLE_MODE_RECEIVING	2
+
+void setup_i2c(uint8_t addr, const i2c_handler_t *handle, void *handler_state);
