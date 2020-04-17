@@ -1,5 +1,28 @@
 /*
- * Simple event logging tool for debugging
+ * I2C Event logging
+ *
+ * This code is called (if #defined) by the i2c driver. It can help
+ * you figure out the flow of execution through the various interrupts.
+ *
+ * Events have three parameters:
+ * 		- The type (like SENT_BYTE)
+ * 		- A call instance (decimal number) I use this to distinguish
+ * 		  different places where the same I2C function (like STOP) may
+ * 		  be called from.
+ * 		- And a data byte, data associated with the I2C function like
+ * 		  the byte received or sent, or the address received. In the
+ * 		  case of errors, this byte is the error number which is defined
+ * 		  below.
+ *
+ * Events are held in a ring buffer, if you capture more events than you
+ * have space in the ring buffer, the earlier ones are discarded. In that
+ * way when you dump the buffer you get the last 'n' events where n is a
+ * maximum of the buffer size - 1. 
+ *
+ * Planned future work is to have one of the 32 bit timers free running at
+ * 10MHz and copying its value into a uint32_t when the event fires, giving
+ * something of an idea about the time between events. Its a poor substitute
+ * for a good tracing probe but it can work in a pinch.
  *
  * BSD 2-Clause License
  * 
@@ -32,126 +55,157 @@
 #include <stdio.h>
 #include <stdint.h>
 #include <stdlib.h>
+#include "../common.h"
 #include "events.h"
 
-#define RED_TEXT 		"\033[31;40;1m"
-#define GREEN_TEXT		"\033[32;40;1m"
-#define YELLOW_TEXT		"\033[33;40;1m"
-#define DEFAULT_TEXT	"\033[0m"
+/***************************************
+ *  E X P E R I M E N T A L   C O D E  *
+ ***************************************/
 
 /*
- * Return a text message to describe the event
+ * This is the event buffer.
  */
-char *
-log_message(event_t e)
-{
-	switch (e) {
-		default:
-			return "Unknown";
-		case NO_EVENT:
-			return "No Event";
-		case ADDRESS_RECEIVED:
-			return "Address Received";
-		case RECV_FULL:
-			return "Received Byte";
-		case XMIT_EMPTY:
-			return (RED_TEXT "Sending Fill Byte (buffer empty)" DEFAULT_TEXT);
-		case BYTE_READ:
-			return (YELLOW_TEXT "Byte read" DEFAULT_TEXT);
-		case BYTE_SENT:
-			return (YELLOW_TEXT "Byte sent" DEFAULT_TEXT);
-		case BYTE_FINISHED:
-			return "Byte Finished";
-		case SLAVE_XMIT:
-			return "Slave Transmit";
-		case SLAVE_RECEIVE:
-			return "Slave Receive";
-		case BUS_ERROR:
-			return "Bus Error";
-		case TIMEOUT:
-			return "Timeout";
-		case ACK_FAIL:
-			return "No Acknowledge (NAK)";
-		case OVERRUN:
-			return "Data Over or Underrun";
-		case SLAVE_STOP:
-			return "Slave STOP";
-		case ADDR1_MATCH:
-			return "Address 1 Matched";
-		case ADDR2_MATCH:
-			return "Address 2 Matched";
-		case GENERAL_CALL:
-			return "General Call";
-		case BUS_ERROR_RESET:
-			return "Reset Bus Error";
-		case BUS_ERROR_DETECTED_AND_RESET:
-			return "Bus Error Detected and Reset";
-		case ACK_FAIL_RESET:
-			return "ACK Failure Reset";
-		case ACK_FAIL_DETECTED_AND_RESET:
-			return "ACK Failure Detected and Reset";
-		case DUMMY_BYTE:
-			return "Dummy Byte";
-		case SLAVE_TRANSMIT_REQUEST:
-			return "Slave Requested to Transmit";
-		case SLAVE_RECEIVE_REQUEST:
-			return "Slave Requested to Receive";
-		case XMIT_ACK_IS_SET:
-			return "TxNE: ACK flag is set";
-		case XMIT_ACK_IS_NOT_SET:
-			return "TxNE: ACK is NOT set.";
-		case XMIT_AF_IS_SET:
-			return "TxNE: AF is set.";
-		case XMIT_AF_IS_NOT_SET:
-			return "TxNE: AF is NOT set.";
-		case XMIT_BTF_IS_SET:
-			return "TxNE: Byte Finished is set.";
-		case XMIT_BTF_IS_NOT_SET:
-			return "TxNE: Byte Finished is NOT set.";
-		case BTF_ERROR:
-			return (RED_TEXT "BTF set but not Rx or Tx!" DEFAULT_TEXT);
-		case STOP_AND_READ_IN_EVENT:
-			return "Stop and read from a STOPF event";
-		case ER_STOP:
-			return "Stop as an ER event";
-		case AF_ALSO_SET:
-			return "AF also set during STOP";
-		case BUS_RESTART:
-			return "Repeated START";
-	}
-}
 
-#define EVENT_BUFSIZE	1024
-event_t event_queue[EVENT_BUFSIZE];
-static uint16_t	event_nxt;
-static uint16_t	event_cur;
+#define SM_EVENT_BUFSIZE	300
 
-extern void uart_puts(char *);
+struct sm_event_t sm_events[SM_EVENT_BUFSIZE];
 
+volatile int	sm_cur_event;
+volatile int 	sm_nxt_event;
+
+
+/*
+ * Capture the state change of the interface.
+ *
+ * The parameter 'c' is which call location originated the state
+ * change. This is to  track down what part of the code is executed
+ * and what part isn't.
+ *
+ * The parameter 'd' is any data associated with the event so the
+ * address, or the error, or the actual data.
+ */
 void
-log_event(event_t e)
+sm_log_state(i2c_event_t ev, uint8_t c, uint8_t d)
 {
-	if (((event_nxt + 1) % EVENT_BUFSIZE) == event_cur) {
-		uart_puts("Event Queue full, Event Discarded\n");
-	}
-	event_queue[event_nxt] = e;
-	event_nxt = (event_nxt + 1) % EVENT_BUFSIZE;
+	sm_events[sm_nxt_event].ev = ev;
+	sm_events[sm_nxt_event].c = c;
+	sm_events[sm_nxt_event].d = d;
+	sm_nxt_event = (sm_nxt_event + 1) % SM_EVENT_BUFSIZE;
 }
 
-int
-logged_events(void)
+/*
+ * Flush the buffer
+ *
+ * This just sets current = next which is an empty buffer as
+ * far as the ringbuffer semantics go.
+ */
+void
+sm_flush_state(void)
 {
-	return ((event_nxt < event_cur) ? ((event_nxt + EVENT_BUFSIZE) - event_cur)
-								    : (event_nxt - event_cur));
+	sm_cur_event = sm_nxt_event;
 }
 
+/*
+ * Return the number of events being held in the buffer.
+ */
 int
-dump_event(void)
+sm_log_size()
 {
-	if (event_nxt == event_cur) {
-		return 0;
+	return ((sm_nxt_event < sm_cur_event) ? 
+			(sm_nxt_event + SM_EVENT_BUFSIZE) - sm_cur_event :
+			sm_nxt_event - sm_cur_event);
+}
+
+/*
+ * Dump out a sequence of state changes captured since the last time
+ * states were dumped out. The sister call sm_flush_state(void) just
+ * sets the pointers to equal thus presenting an empty buffer.
+ *
+ * Note: I don't call printf as this code may be called at interrupt time
+ * which printf really doesn't like.
+ */
+void
+sm_dump_state(void)
+{
+	char buf[60];
+	uart_puts("[ ");
+	while (sm_cur_event != sm_nxt_event) {
+		struct sm_event_t *ce;
+
+		ce = &sm_events[sm_cur_event];
+		switch (sm_events[sm_cur_event].ev) {
+			default:
+				sprintf(buf, "UNK(%d)", (int) ce->ev);
+				uart_puts(buf);
+				break;
+			case ADDR1_WRITE:
+				sprintf(buf,"ADDR1_WRITE<0x%02X>", ce->d);
+				uart_puts(buf);
+				break;
+			case ADDR1_READ:
+				sprintf(buf,"ADDR1_READ<0x%02X>", ce->d);
+				uart_puts(buf);
+				break;
+			case ADDR2_WRITE:
+				sprintf(buf,"ADDR2_WRITE<0x%02X>", ce->d);
+				uart_puts(buf);
+				break;
+			case ADDR2_READ:
+				sprintf(buf,"ADDR2_READ<0x%02X>", ce->d);
+				uart_puts(buf);
+				break;
+			case RECV_BYTE:
+				sprintf(buf,"RECV_BYTE%d<0x%02X>", ce->c, ce->d);
+				uart_puts(buf);
+				break;
+			case SENT_BYTE:
+				sprintf(buf,"SENT_BYTE%d<0x%02X>", ce->c, ce->d);
+				uart_puts(buf);
+				break;
+			case NAK:
+				sprintf(buf,"NAK%d", ce->c);
+				uart_puts(buf);
+				break;
+			case CALL:
+				uart_puts("CALL");
+				break;
+			case STOP:
+				uart_puts("STOP");
+				break;
+			case ERROR:
+				switch(ce->d) {
+					case SM_ERR_TIMEOUT:
+						sprintf(buf,"ERROR%d<TIMEOUT>", ce->c);
+						uart_puts(buf);
+						break;
+					case SM_ERR_ARLO:
+						sprintf(buf,"ERROR%d<ARLO>", ce->c);
+						uart_puts(buf);
+						break;
+					case SM_ERR_OVERUNDERFLOW:
+						sprintf(buf,"ERROR%d<OVERUNDERFLOW>", ce->c);
+						uart_puts(buf);
+						break;
+					case SM_ERR_PEC:
+						sprintf(buf,"ERROR%d<PEC>", ce->c);
+						uart_puts(buf);
+						break;
+					case SM_ERR_BUSERROR:
+						sprintf(buf,"ERROR%d<BUSERROR>", ce->c);
+						uart_puts(buf);
+						break;
+					default:
+						sprintf(buf,"ERROR%d<0x%02X>", ce->c, ce->d);
+						uart_puts(buf);
+						break;
+				}
+				break;
+		}
+		sm_cur_event = (sm_cur_event + 1) % SM_EVENT_BUFSIZE;
+		if (sm_cur_event != sm_nxt_event) {
+			uart_puts(" => ");
+		} else {
+			uart_puts(" ]");
+		}
 	}
-	printf("EVT: %s\n", log_message(event_queue[event_cur]));
-	event_cur = (event_cur + 1) % EVENT_BUFSIZE;
-	return 1;
 }

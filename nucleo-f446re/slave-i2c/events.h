@@ -32,50 +32,45 @@
 #pragma once
 #include <stdint.h>
 
-
+/*
+ * This is some code where we're playing around with defining an
+ * I2C state machine that can be used to drive interface behaviors.
+ */
 typedef enum {
-	NO_EVENT,
-	ADDRESS_RECEIVED,
-	RECV_FULL,
-	XMIT_EMPTY,
-	BYTE_READ,
-	BYTE_SENT,
-	BYTE_FINISHED,
-	SLAVE_XMIT,
-	SLAVE_RECEIVE,
-	TIMEOUT,
-	OVERRUN,
-	SLAVE_STOP,
-	ADDR1_MATCH,
-	ADDR2_MATCH,
-	GENERAL_CALL,
-	BUS_ERROR,
-	BUS_RESTART,
-	BUS_ERROR_RESET,
-	BUS_ERROR_DETECTED_AND_RESET,
-	ACK_FAIL,
-	ACK_FAIL_RESET,
-	ACK_FAIL_DETECTED_AND_RESET,
-	DUMMY_BYTE,
-	SLAVE_TRANSMIT_REQUEST,
-	SLAVE_RECEIVE_REQUEST,
-	XMIT_ACK_IS_SET,
-	XMIT_ACK_IS_NOT_SET,
-	XMIT_AF_IS_SET,
-	XMIT_AF_IS_NOT_SET,
-	XMIT_BTF_IS_SET,
-	XMIT_BTF_IS_NOT_SET,
-	STOP_AND_READ_IN_EVENT,
-	BTF_ERROR,
-	ER_STOP,
-	AF_ALSO_SET,
-} event_t;
+	ADDR1_WRITE = 1,	/* Address 1 matched with R/W* = 0 */
+	ADDR1_READ,			/* Address 1 matched with R/W* = 1 */
+	ADDR2_WRITE,		/* Address 2 matched with R/W* = 0 */
+	ADDR2_READ,			/* Address 2 matched with R/W* = 1 */
+	RECV_BYTE,			/* Interface received a byte */
+	SENT_BYTE,			/* Interface needs a byte to write */
+	NAK,				/* NAK recieved on data transfer (write) */
+	STOP,				/* STOP received on data transfer (read) */
+	CALL,				/* General CALL */
+	ERROR,				/* Some Error occurred */
+} i2c_event_t;
 
-/* Put a new event in the log */
-void log_event(event_t e);
-/* return a text string for the event */
-char *log_message(event_t e);
-/* How many events have been logged but not seen? */
-int logged_events(void);
-/* Dump the next event, returns 0 if there are no events to dump */
-int dump_event(void);
+struct sm_event_t {
+	i2c_event_t	ev;
+	uint8_t		c;
+	uint8_t		d;
+};
+
+/*
+ * Specific errors that are detected.
+ */
+#define SM_ERR_TIMEOUT			1
+#define SM_ERR_OVERUNDERFLOW	2
+#define SM_ERR_ARLO				4
+#define SM_ERR_PEC				8
+#define SM_ERR_BUSERROR			16
+
+/* Prototypes */
+/* Log an i2c event */
+void sm_log_state(i2c_event_t ev, uint8_t, uint8_t);
+/* Dump all i2c events that have happened since last dump. */
+void sm_dump_state(void);
+/* Flush (discard) all events in the buffer */
+void sm_flush_state(void);
+/* Return the number of events being held in the log currently */
+int sm_log_size(void);
+
