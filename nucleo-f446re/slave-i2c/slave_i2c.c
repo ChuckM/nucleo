@@ -37,20 +37,15 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include <stdio.h>
 #include <stdint.h>
-#include <string.h>
-#include <stdlib.h>
-#include <ctype.h>
-#include "../common.h"
-#include "ring.h"
-#include "events.h"
-#include "slave_i2c.h"
-#include "echo_handler.h"
+#include <stdlib.h>	/* for malloc */
+#include <string.h>	/* for memcpy */
 #include <libopencm3/stm32/rcc.h>
 #include <libopencm3/stm32/i2c.h>
 #include <libopencm3/stm32/gpio.h>
 #include <libopencm3/cm3/nvic.h>
+#include "events.h"
+#include "slave_i2c.h"
 
 /*
  * One handler for each address
@@ -302,7 +297,7 @@ i2c1_ev_isr(void)
  * as SCA/D14 and SCL/D15 which are associated with PB8 (SCA) and
  * PB9 (SCL).
  */
-void
+int
 setup_i2c(uint8_t addr1, const i2c_handler_t *handler1, void *handler1_state,
 		  uint8_t addr2, const i2c_handler_t *handler2, void *handler2_state)
 {
@@ -344,35 +339,34 @@ setup_i2c(uint8_t addr1, const i2c_handler_t *handler1, void *handler1_state,
 	/*
 	 * Set up the handler(s) that will respond to I2C messages
 	 * coming in on this address.
+	 *
+	 * Note, you could use statically allocated handler and state
+	 * structures if you want to avoid the use of malloc.
 	 */
 	dev[0] = (i2c_handler_t *) malloc(sizeof(i2c_handler_t));
 	if (dev[0] == NULL) {
-		fprintf(stderr, "Unable to allocate handler\n");
-		return;
+		return SI2C_RETURN_NO_MEMORY;
 	}
 	memcpy(dev[0], handler1, sizeof(i2c_handler_t));
 	dev[0]->addr = addr1;
 	dev[0]->state = handler1_state;
 	if (dev[0]->state == NULL) {
-		fprintf(stderr, "Missing handler 1 state\n");
 		free(dev[0]);
-		return;
+		return SI2C_RETURN_MISSING_H1_STATE;
 	}
 	if (addr2 != 0) {
 		dev[1] = (i2c_handler_t *) malloc(sizeof(i2c_handler_t));
 		if (dev[1] == NULL) {
-			fprintf(stderr, "Unable to allocate second handler\n");
 			free(dev[0]);
-			return;
+			return SI2C_RETURN_NO_MEMORY;
 		}
 		memcpy(dev[1], handler2, sizeof(i2c_handler_t));
 		dev[1]->addr = addr2;
 		dev[1]->state = handler2_state;
 		if (dev[1] == NULL) {
-			fprintf(stderr, "Missing handler 2 state!\n");
 			free(dev[1]);
 			free(dev[0]);
-			return;
+			return SI2C_RETURN_MISSING_H2_STATE;
 		}
 	}
 
@@ -381,5 +375,6 @@ setup_i2c(uint8_t addr1, const i2c_handler_t *handler1, void *handler1_state,
 	nvic_enable_irq(NVIC_I2C1_ER_IRQ);
 	/* turn on the peripheral */
 	I2C_CR1(I2C1) = I2C_CR1_ACK | I2C_CR1_PE; 
+	return SI2C_RETURN_SUCCESS;
 }
 

@@ -44,5 +44,12 @@ typedef struct {
 #define HANDLE_MODE_SENDING		1
 #define HANDLE_MODE_RECEIVING	2
 
-void setup_i2c(uint8_t addr1, const i2c_handler_t *h1, void *h1_state,
+#define SI2C_RETURN_SUCCESS			 	 0
+#define SI2C_RETURN_NO_MEMORY			-1
+#define SI2C_RETURN_MISSING_H1_STATE	-2
+#define SI2C_RETURN_MISSING_H2_STATE	-3
+
+/* setup the slave I2C interface, returns 0 on success < 0 on failure */
+int setup_i2c(uint8_t addr1, const i2c_handler_t *h1, void *h1_state,
 			   uint8_t addr2, const i2c_handler_t *h2, void *h2_state);
+
