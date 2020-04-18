@@ -36,14 +36,15 @@
 #include <string.h>
 #include "slave_i2c.h"
 #include "emdisplay_handler.h"
+#include "../common.h"
 
 /* private command state machine */
 enum emd_cmd_state_t {
-	EMD_STATE_IDLE = 0,
-	EMD_STATE_SEND_REG,
-	EMD_STATE_RECV_REG,
-	EMD_STATE_RECV_REG_VALUE,
-	EMD_STATE_INVALID_REG,
+	EMD_STATE_IDLE = 0,				/* 0 */
+	EMD_STATE_SEND_REG = 1,			/* 1 */
+	EMD_STATE_RECV_REG = 2,			/* 2 */
+	EMD_STATE_RECV_REG_VALUE = 3,	/* 3 */
+	EMD_STATE_INVALID_REG = 4,		/* 4 */
 };
 
 static void emd_start(void *state, uint8_t rw);
@@ -52,8 +53,9 @@ static void emd_recv(void *state, uint8_t db);
 static void emd_finish(void *state, uint8_t err);
 
 static const char *__emd_init_msg =
-/*	0123456789ABCEF */
-   "Emulated       "
+/*            111111   */
+/*	0123456789012345   */
+   "Emulated        "
    "   Display V1.0";
 
 /*
@@ -65,7 +67,6 @@ const i2c_handler_t emd_handler = {
 	.start = emd_start,
 	.stop = emd_finish,
 	.addr = 0,
-	.mode = HANDLE_MODE_IDLE,
 	.state = NULL
 };
 
@@ -132,6 +133,8 @@ emd_reg_name(enum emd_reg_t reg)
 	}
 }
 
+static char __tmp_buf[80];
+
 /*
  * Start a transaction
  */
@@ -140,10 +143,16 @@ emd_start(void *s, uint8_t rw)
 {
 	struct emd_state_t *state = (struct emd_state_t *) s;
 
-	if (rw) {
-		state->cur_mode = EMD_STATE_SEND_REG;
-	} else {
-		state->cur_mode = EMD_STATE_RECV_REG;
+	switch (rw) {
+		case HANDLE_MODE_SENDING:
+			/* this is a restart */
+			state->cur_mode = EMD_STATE_SEND_REG;
+			break;
+		case HANDLE_MODE_RECEIVING:
+			state->cur_mode = EMD_STATE_RECV_REG;
+			break;
+		default:
+			break;
 	}
 }
 
@@ -229,23 +238,32 @@ emd_send(void *s)
 					}
 					return db;
 				case EMD_REG_CMD:
-					return 0x00;
+					db = 0x00;
+					break;
 				case EMD_REG_ROW:
-					return state->row;
+					db = state->row;
+					break;
 				case EMD_REG_MAX_ROW:
-					return state->row_max;
+					db = state->row_max;
+					break;
 				case EMD_REG_COL:
-					return state->col;
+					db = state->col;
+					break;
 				case EMD_REG_MAX_COL:
-					return state->col_max;
+					db = state->col_max;
+					break;
 				case EMD_REG_FG:
-					return state->fg;
+					db = state->fg;
+					break;
 				case EMD_REG_BG:
-					return state->bg;
+					db = state->bg;
+					break;
 				default:
 					state->send_errors++;
-					return 0xff;
+					db = 0xff;
+					break;
 			}
+			return db;
 	}
 	state->send_errors++;
 	return 0xff;
@@ -299,10 +317,11 @@ emd_finish(void *s, uint8_t err)
 	 * Next, deal emulator usage errors, specifically did the master
 	 * try to read or write an invalid register? Did the handler get into
 	 * some weird state? The only valid state that it could be in at  this
-	 * point is EMD_STATE_RECV_REG, we'll handle that last.
+	 * point is EMD_STATE_RECV_REG_VALUE, we'll handle that last.
 	 */
-	if (state->cur_mode != EMD_STATE_RECV_REG) {
+	if (state->cur_mode != EMD_STATE_RECV_REG_VALUE) {
 		state->ops_errors++;
+		snprintf(__tmp_buf, 40, "(State is 0x%x)", (int)state->cur_mode);
 		state->cur_mode = EMD_STATE_IDLE;
 		return;
 	}
@@ -353,6 +372,7 @@ emd_finish(void *s, uint8_t err)
 							' ', state->row_max * state->col_max);
 					snprintf((char *)state->display, EMD_DISPLAY_SIZE, "%s", 
 															__emd_init_msg);
+					state->row = state->col = 0;
 					break;
 			}
 	}

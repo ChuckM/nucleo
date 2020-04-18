@@ -53,21 +53,22 @@ struct emd_state_t {
 };
 
 enum emd_reg_t {                     
-	EMD_REG_CMD = 0,
-	EMD_REG_ROW,
-	EMD_REG_MAX_ROW,
-	EMD_REG_COL,
-	EMD_REG_MAX_COL,
-	EMD_REG_FG,
-	EMD_REG_BG,
-    EMD_REG_DISPLAY				/* Always last */
+	EMD_REG_CMD = 0,		/* 0 */
+	EMD_REG_ROW,			/* 1 */
+	EMD_REG_MAX_ROW,		/* 2 */
+	EMD_REG_COL,			/* 3 */
+	EMD_REG_MAX_COL,		/* 4 */
+	EMD_REG_FG,				/* 5 */
+	EMD_REG_BG,				/* 6 */
+    EMD_REG_DISPLAY			/* 7 	(Always last) */
 }; 
 
 enum emd_cmd_t {
-	EMD_CMD_CLEAR = 0,
-	EMD_CMD_CLEAR_LINE,
-	EMD_CMD_INIT,
-	EMD_CMD_HOME
+	EMD_CMD_NOP = 0,		/* do nothing command */
+	EMD_CMD_CLEAR = 1,		/* Clear the display */
+	EMD_CMD_CLEAR_LINE = 2,	/* Clear the current line in ROW register */
+	EMD_CMD_INIT = 3,		/* Re-initialize display */
+	EMD_CMD_HOME = 4		/* Cursor to home (1, 1) position */
 };
 
 #define EMD_COLOR_BLACK		0x0

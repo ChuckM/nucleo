@@ -43,37 +43,18 @@
 #include "events.h"
 #include "slave_i2c.h"
 #include "echo_handler.h"
+#include "emdisplay_handler.h"
 #include <libopencm3/stm32/rcc.h>
 #include <libopencm3/stm32/i2c.h>
 #include <libopencm3/stm32/gpio.h>
 #include <libopencm3/cm3/nvic.h>
 
-#define RED_TEXT 		"\033[31;40;1m"
-#define GREEN_TEXT		"\033[32;40;1m"
-#define YELLOW_TEXT		"\033[33;40;1m"
+#define RED_TEXT 		"\033[31;40m"
+#define GREEN_TEXT		"\033[32;40m"
+#define YELLOW_TEXT		"\033[33;40m"
 #define DEFAULT_TEXT	"\033[0m"
 #define CLEAR_LINE		"\033[2K"
 #define CLEAR_SCREEN	"\033[2J"
-
-/*
- * For test type 2, we have a bank of 16 pseudo registers and
- * one memory area of 32 bytes (simulates something like a 16x2
- * Character display device).
- */
-struct p_reg_t {
-	uint16_t	val;
-	uint8_t		changed;
-} reg_bank[16];
-
-int current_reg = 0;
-
-#define MEM_REG_SIZE	32
-
-struct mem_reg_t {
-	uint8_t		buf[MEM_REG_SIZE];
-	uint8_t		cursor;
-	uint8_t		changed;
-} mem_reg;
 
 void dump_status(uint16_t sr);
 
@@ -164,27 +145,25 @@ moveTo(int row, int col)
 int
 main(void)
 {
-	uint8_t addr = 0x20;
+	uint8_t addr1 = 32;
+	uint8_t addr2 = 42;
 	char buf[80];
-	uint16_t membuf[MEM_REG_SIZE];
 	struct echo_state_t *echo;
+	struct emd_state_t *emd;
 
 	nucleo_clock_setup();
 	uart_setup(115200);
 	led_setup();
 	echo = echo_init(256);
-	setup_i2c(addr, &echo_handler, (void *)echo);
-	memset(&mem_reg, 0, sizeof(mem_reg));
-	memset(&reg_bank, 0, sizeof(reg_bank));
-	/* initial so they will all display originally */
-	for (int i = 0; i< 16; i++) {
-		reg_bank[i].changed++;
-	}
-	mem_reg.changed++;
+	emd = emd_init();
+	/* Set up our I2C with two addresses */
+	setup_i2c(addr1, &echo_handler, (void *)echo,
+		      addr2, &emd_handler, (void *)emd);
 	moveTo(1,1);
 	uart_puts(CLEAR_SCREEN);
 	fprintf(stderr, "I2C Slave Test Program\n");
-	printf("Address is set to 0x%2X hex or %d decimal\n", addr, addr);
+	printf("Address is set to 0x%2X hex or %d decimal\n", addr1, addr1);
+	printf("Second Address is set to 0x%2X hex or %d decimal\n", addr2, addr2);
 	printf("Enter ^C at any time to restart.\n");
 	while (1) {
 		int test = 0;
@@ -221,87 +200,67 @@ main(void)
 				break;
 			case 2:
 				/* first lay out the form */
+				uart_puts(CLEAR_SCREEN);
 				moveTo(1,1);
-				uart_puts(CLEAR_LINE);
-				printf("Register State:\n");
-				for (int i = 0; i < 8; i++) {
-					moveTo(i + 2, 1);
-					uart_puts(CLEAR_LINE);
-					printf("R%02d =        (     )", i);
-					printf("\033[5CR%02d =        (     )", i + 8);
-					fflush(stdout);
-				}
-				moveTo(10, 1);
-				uart_puts(CLEAR_LINE);
-				moveTo(11, 1);
-				uart_puts(CLEAR_LINE);
-				uart_puts("Memory Register (R16) :");
-				moveTo(12, 1);
-				uart_puts(CLEAR_LINE);
-				
-				/*
-				 * Now track register contents as they change
-				 */
+				printf("Emulated Display:\n");
 			 	while (1) {
-					for (int i = 0; i < 16; i++) {
-						if (reg_bank[i].changed) {
-							moveTo((i / 2) + 2, (i & 1) * 25 + 7);
-							printf("0x%04x", reg_bank[i].val);
-							printf("\033[2C%5d", reg_bank[i].val);
-							fflush(stdout);
-							reg_bank[i].changed = 0;
-						} 
-					}
-					/* flag memory locations that changed */
-					if (mem_reg.changed) {
-						moveTo(14, 1);
-						mem_reg.changed = 0;
-						for (int j = 0; j < MEM_REG_SIZE; j++) {
-							membuf[j] = ((membuf[j] & 0xff) != mem_reg.buf[j]) ?
-									membuf[j] | 0x100 : mem_reg.buf[j];
-						}
-						for (int j = 0; j < 2; j++) {
-							uint8_t	*t = &(mem_reg.buf[j*16]);
-							moveTo(13+j, 1);
-							for (int k = 0; k < 16; k++) {
-								if (membuf[j*2+k] & 0x100) {
-									uart_puts(YELLOW_TEXT);
-									membuf[j*2+k] &= 0xff;
-								}
-								printf("%02x ", *(t+k));
-								fflush(stdout);
-								uart_puts(DEFAULT_TEXT);
-								if (k == 7) {
-									uart_puts("  ");
-								}
-							}
-							uart_puts("   ");
-							for (int k = 0; k < 16; k++) {
-								if (membuf[j*2+k] & 0x100) {
-									uart_puts(YELLOW_TEXT);
-								}
-								uart_putc((isprint(*(t+k))) ? 
-									(char) *(t+k) : '.');
-								uart_puts(DEFAULT_TEXT);
-							}
+					while (emd->state_changed == 0) {
+						msleep(100);
+						if (sm_log_size()) {
+							uart_puts("\033[J"); /* clear to end of screen */
+							sm_dump_state();
+							printf("\n");
 						}
 					}
-					msleep(100);
+					emd->state_changed = 0;
+					moveTo(3, 1);
+					sprintf(buf,"\033[3%d;4%dm", emd->fg, emd->bg);
+					printf("Display Registers\n");
+					printf("-----------------\n");
+					printf("[0] Cmd\t\t%d\n", emd->cmd);
+					printf("[1] Row\t\t%d\n", emd->row);
+					printf("[2] MaxRow\t%d\n", emd->row_max);
+					printf("[3] Col\t\t%d\n", emd->col);
+					printf("[4] MaxCol\t%d\n", emd->col_max);
+					printf("[5] FgColor\t%d\n", emd->fg);
+					printf("[6] BgColor\t%d\n", emd->bg);
+					moveTo(3, 27);
+					uart_puts("Display Contents");
+					moveTo(4, 25);
+					uart_puts("--------------------");
+					moveTo(6, 25);
+					uart_puts("+------------------+\n");
+					for (int i = 0; i < emd->row_max; i++) {
+						moveTo(i+7, 25);
+						uart_puts("| ");
+						uart_puts(buf);
+						for (int k = 0; k < emd->col_max; k++) {
+							char x = *(((char *) emd->display)+
+										               i * emd->col_max + k);
+							uart_putc(isprint(x) ? x : ' ');
+						}
+						uart_puts(DEFAULT_TEXT);
+						uart_puts(" |");
+					}
+					moveTo(7+emd->row_max, 25);
+					uart_puts("+------------------+\n");
+					moveTo(14,1);
+					printf("I2C Transaction:\n");
 				}
 				break;
-				case 3:
-					printf("\nDumping state tables on transactions:\n");
-					while(1) {
-						while (sm_log_size() == 0) {
-							msleep(100);
-						}
-						sm_dump_state();
-						printf("\n-------- separator -------\n");
+			case 3:
+				printf("\nDumping state tables on transactions:\n");
+				while(1) {
+					while (sm_log_size() == 0) {
+						msleep(100);
 					}
-					break;
-				default:
-					printf("Unknown test\n");
-					break;
+					sm_dump_state();
+					printf("\n-------- separator -------\n");
+				}
+				break;
+			default:
+				printf("Unknown test\n");
+				break;
 			}
 		}
 }

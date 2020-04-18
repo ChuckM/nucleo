@@ -38,12 +38,11 @@ typedef struct {
 	void		(*start)(void *, uint8_t rw);
 	void		(*stop)(void *, uint8_t err);
 	uint16_t	addr;
-	uint8_t		mode; 	/* IDLE, READING, WRITING */
 	void		*state;
 } i2c_handler_t;
 
-#define HANDLE_MODE_IDLE		0
 #define HANDLE_MODE_SENDING		1
 #define HANDLE_MODE_RECEIVING	2
 
-void setup_i2c(uint8_t addr, const i2c_handler_t *handle, void *handler_state);
+void setup_i2c(uint8_t addr1, const i2c_handler_t *h1, void *h1_state,
+			   uint8_t addr2, const i2c_handler_t *h2, void *h2_state);

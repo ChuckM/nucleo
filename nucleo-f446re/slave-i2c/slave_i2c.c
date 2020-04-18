@@ -56,6 +56,7 @@
  * One handler for each address
  */
 static i2c_handler_t	*(dev[2]);
+static i2c_handler_t	*__i2c_h;	/* cached pointer */
 
 /*
  * Interrupt service routine for I2C interface #1 Errors
@@ -63,8 +64,7 @@ static i2c_handler_t	*(dev[2]);
 void
 i2c1_er_isr(void)
 {
-	i2c_handler_t	*h;
-	uint16_t sr1, sr2;
+	uint16_t sr1;
 
 	sr1 = I2C_SR1(I2C1);
 
@@ -74,39 +74,49 @@ i2c1_er_isr(void)
 		if ((sr1 & I2C_SR1_AF) != 0) {
 			sm_log_state(NAK, 1, 0);
 		}
+		if (__i2c_h != NULL) {
+			(*__i2c_h->stop)(__i2c_h->state, 0);
+		}
 	}
 	if ((sr1 & I2C_SR1_TIMEOUT) != 0) {
 		sm_log_state(ERROR, 0, SM_ERR_TIMEOUT);
+		if (__i2c_h != NULL) {
+			(*__i2c_h->stop)(__i2c_h->state, SM_ERR_TIMEOUT);
+		}
 	}
 	if ((sr1 & I2C_SR1_OVR) != 0) {
-		sm_log_state(ERROR, 0, SM_ERR_OVERUNDERFLOW);
+		sm_log_state(ERROR, 1, SM_ERR_OVERUNDERFLOW);
+		if (__i2c_h != NULL) {
+			(*__i2c_h->stop)(__i2c_h->state, SM_ERR_OVERUNDERFLOW);
+		}
 	}
-	/* This appears to be "NAK" which is literally "No Acknowledge"
+
+	/*
+	 * This appears to be "NAK" which is literally "No Acknowledge"
 	 * and this is described as "Set by hardware when no ack is returned."
 	 */
 	if ((sr1 & I2C_SR1_AF) != 0) {
 		I2C_SR1(I2C1) = I2C_SR1(I2C1) & ~(I2C_SR1_AF);
-		sr2 = I2C1_SR2;
-		h = ((sr2 & I2C_SR2_DUALF) == 0) ? dev[0] : dev[1];
-		if (h) {
+		if (__i2c_h) {
 			sm_log_state(NAK, 2, 0);
-			(*h->stop)(h->state, 0);
+			(*__i2c_h->stop)(__i2c_h->state, 0);
 		} else {
 			sm_log_state(NAK, 3, 0);
 		}
 		/* stop after no acknowledge (NAK) */
-		sm_log_state(STOP, 0, 0);
+		sm_log_state(STOP, 1, 0);
 		I2C_CR1(I2C1) |= I2C_CR1_STOP;
 	}
 	/* Note this happens often if you don't have the noise filter set */
 	if ((sr1 & I2C_SR1_BERR) != 0) {
 		I2C_SR1(I2C1) = I2C_SR1(I2C1) & ~(I2C_SR1_BERR);
-		sm_log_state(ERROR, 0, SM_ERR_BUSERROR);
+		sm_log_state(ERROR, 2, SM_ERR_BUSERROR);
+
+		if (__i2c_h) {
+			(*__i2c_h->stop)(__i2c_h->state, SM_ERR_BUSERROR);
+		}
 	}
 }
-
-/* XXX: Determine if we need to keep this */
-uint8_t	__addr = 0;
 
 /*
  * Interrupt service routine for I2C interface #1 Events
@@ -120,7 +130,6 @@ i2c1_ev_isr(void)
 {
 	uint16_t 		sr1, sr2;	/* status register copies */
 	uint8_t			db;			/* 8 bit data byte accumulator */
-	i2c_handler_t	*h = NULL;	/* Handler to use */
 	
 	/*
 	 * Read the status registers. 
@@ -131,9 +140,6 @@ i2c1_ev_isr(void)
 	 *
 	 * Also, apparently the DUALF flag only gets reset by hardware on
 	 * a ADDR or STOP. The question then is if it persists across calls.
-	 *
-	 * XXX: Also can we safely read SR2 during the DATA phase before a STOP
-	 * to "remind us" which address is in use?
 	 *
 	 * XXX: Audit reset behavior to identify the risk here.
 	 */
@@ -154,16 +160,32 @@ i2c1_ev_isr(void)
  	 * byte is the only byte we're going to get, the master will NAK it and
  	 * the ST Micro I2C implementation won't set BTF to let us know it
  	 * arrived. 
+ 	 *
+ 	 * Note: Also this is the only time we know for sure which handler we
+ 	 * should be using so we cache that in __i2c_h for other code to use.
+ 	 * If __i2c_h is NULL then we don't have a handler attached.
  	 */
 	if ((sr1 & I2C_SR1_ADDR) != 0) {
+		i2c_event_t aa;
+		uint8_t	addr = 0xff;
+
 		/* This resets teh ADDR flag per the reference manual */
 		sr2 = I2C_SR2(I2C1);
-		/* set which handle to use */
-		h = ((sr2 & I2C_SR2_DUALF) == 0) ? dev[0] : dev[1];
-		if (h == NULL) {
-			/* handler not defined */
-			/* XXX: do a STOP here and log error */
-			return;
+
+		/*
+		 * Now, check to see if it is ADDR1 or ADDR2 (DUALF == 0 means ADDR1)
+		 * then set which handler to use. (dev[0] for ADDR1, dev[1] for ADDR2)
+		 * Note if its a read (we're sending) or a write (we're receiving)
+		 * and put that into 'aa' for logging.
+		 */
+		if ((sr2 & I2C_SR2_DUALF) == 0) {
+			__i2c_h = dev[0];
+			addr = __i2c_h->addr;
+			aa = ((sr2 & I2C_SR2_TRA) != 0) ? ADDR1_READ : ADDR1_WRITE ;
+		} else {
+			__i2c_h = dev[1];
+			addr = __i2c_h->addr;
+			aa = ((sr2 & I2C_SR2_TRA) != 0) ? ADDR2_READ : ADDR2_WRITE ;
 		}
 
 		if ((sr2 & I2C_SR2_TRA) != 0) {
@@ -171,13 +193,20 @@ i2c1_ev_isr(void)
 			 * If the TRA bit is non zero we're transmitting 
 			 * data *to* the master
 			 */
-			sm_log_state(ADDR1_READ, 1, h->addr);
-			/* XXX this is redundant, but necessary? */
-			h->mode = HANDLE_MODE_SENDING;
-			(*h->start)(h->state, HANDLE_MODE_SENDING);
-			/* XXX: is there a race here? or will TxE always be true */
+			sm_log_state(aa, 1, addr);
+			if (__i2c_h) {
+				(*__i2c_h->start)(__i2c_h->state, HANDLE_MODE_SENDING);
+			}
+
+			/*
+			 * DR starts empty, so we verify that and send first data
+			 * byte.
+			 */
 			if (sr1 & I2C_SR1_TxE) {
-				db = (*h->send)(h->state);
+				db = 0xff;
+				if (__i2c_h) {
+					db = (*__i2c_h->send)(__i2c_h->state);
+				}
 				sm_log_state(SENT_BYTE, 1, db); 
 				I2C1_DR = db; /* send the actual byte */
 			}
@@ -186,22 +215,30 @@ i2c1_ev_isr(void)
 			 * When the TRA bit is zero we're receiving
 			 * data *from* the master
 			 */
-			sm_log_state(ADDR1_WRITE, 1, h->addr);
-			h->mode = HANDLE_MODE_RECEIVING;
-			(*h->start)(h->state, HANDLE_MODE_RECEIVING);
+			sm_log_state(aa, 1, addr);
+			if (__i2c_h) {
+				(*__i2c_h->start)(__i2c_h->state, HANDLE_MODE_RECEIVING);
+			}
 
-			/* wait for the first byte (may be NAK'd) */
+			/*
+			 * Now we have to wait for the first byte because it may be a
+			 * one byte transfer and we won't see an ACK so we won't see
+			 * and ACK Failure so we won't get a BTF event to pick it up.
+			 */
 			do {
 				sr1 = I2C1_SR1;
 			} while ((sr1 & (I2C_SR1_RxNE | I2C_SR1_TIMEOUT)) == 0);
 			if ((sr1 & I2C_SR1_RxNE) != 0) {
 				db = I2C1_DR;
-				(*h->recv)(h->state, db);
-				sm_log_state(RECV_BYTE, 1, db);
+				if (__i2c_h) {
+					(*__i2c_h->recv)(__i2c_h->state, db);
+					sm_log_state(RECV_BYTE, 1, db);
+				}
 			} else {
-				/* XXX: should have handle versions of error codes */
-				(*h->stop)(h->state, SM_ERR_TIMEOUT);
-				sm_log_state(ERROR, 2, SM_ERR_TIMEOUT);
+				if (__i2c_h) {
+					(*__i2c_h->stop)(__i2c_h->state, SM_ERR_TIMEOUT);
+				}
+				sm_log_state(ERROR, 3, SM_ERR_TIMEOUT);
 			}
 		}
 	}
@@ -213,35 +250,22 @@ i2c1_ev_isr(void)
 	 * and reset the STOP condition.
 	 *
 	 * If we are transmitting we set the STOP condition? (Not sure)
-	 * XXX we need to make sure we distinguish which address is active
-	 * the manual is unclear, it says DUALF is 'reset' during STOPF
-	 * but is that before or after the read of SR2? And before or
-	 * after resetting STOPF?
 	 */
 	if ((sr1 & I2C_SR1_STOPF) != 0) {
 		sr2 = I2C_SR2(I2C1);
-		/* set which handle to use */
-		h = ((sr2 & I2C_SR2_DUALF) == 0) ? dev[0] : dev[1];
-		if (h == NULL) {
-			/* handler not defined */
-			/* XXX: do a STOP here and log error */
-			return;
-		}
-		/* XXX this is where it is critical, if a byte is waiting who
-		 * was it intended for, address 1 or address 2?
-		 */
 		if ((sr1 & I2C_SR1_RxNE) != 0) {
 			db = I2C1_DR;
-			sm_log_state(RECV_BYTE, 3, db);
-			(*h->recv)(h->state, db);
+			if (__i2c_h) {
+				(*__i2c_h->recv)(__i2c_h->state, db);
+			}
+			sm_log_state(RECV_BYTE, 2, db);
 		}
-		/*
-		 * XXX test vector, open address 2, write to it and see where
-		 * the STOP ends up.
-		 */
-		sm_log_state(STOP, 0, 0);
-		(*h->stop)(h->state, 0);
-		/* Stop clearing sequence, read SR1 and write CR1 */
+
+		sm_log_state(STOP, 2, 0);
+		if (__i2c_h) {
+			(*__i2c_h->stop)(__i2c_h->state, 0);
+		}
+		__i2c_h = NULL;
 		sr1 = I2C_SR1(I2C1);
 		I2C_CR1(I2C1) |= I2C_CR1_PE;
 	}
@@ -251,26 +275,21 @@ i2c1_ev_isr(void)
 	 *
 	 * If we are receiving, read the next byte.
 	 *
-	 * XXX: This code assumes that DUALF remains in the "correct"
-	 * state. We'll have to test that.
-	 *
 	 */
 	if ((sr1 & I2C_SR1_BTF) != 0) {
 		sr2 = I2C_SR2(I2C1);
-		/* set which handle to use */
-		h = ((sr2 & I2C_SR2_DUALF) == 0) ? dev[0] : dev[1];
-		if (h == NULL) {
-			/* handler not defined */
-			/* XXX: do a STOP here and log error */
-			return;
-		}
 		if ((sr1 & I2C_SR1_RxNE) != 0) {
 			db = I2C1_DR;
-			sm_log_state(RECV_BYTE, 4, db);
-			(*h->recv)(h->state, db);
+			if (__i2c_h) {
+				(*__i2c_h->recv)(__i2c_h->state, db);
+			}
+			sm_log_state(RECV_BYTE, 3, db);
 		} else if ((sr1 & I2C_SR1_TxE) != 0) {
-			db = (*h->send)(h->state);
-			sm_log_state(SENT_BYTE, 4, db);
+			db = 0xff;
+			if (__i2c_h) {
+				db = (*__i2c_h->send)(__i2c_h->state);
+			}
+			sm_log_state(SENT_BYTE, 2, db);
 			I2C1_DR = db;
 		}
 	}
@@ -284,9 +303,11 @@ i2c1_ev_isr(void)
  * PB9 (SCL).
  */
 void
-setup_i2c(uint8_t addr, const i2c_handler_t *handler, void *handler_state)
+setup_i2c(uint8_t addr1, const i2c_handler_t *handler1, void *handler1_state,
+		  uint8_t addr2, const i2c_handler_t *handler2, void *handler2_state)
 {
 	int fpclk = rcc_apb1_frequency / 1000000;
+
 	/*
  	 * Enable GPIOB (may be redundant but that is okay)
  	 * Set the pins to Alternate Function, low speed (2MHz), and open drain
@@ -303,31 +324,62 @@ setup_i2c(uint8_t addr, const i2c_handler_t *handler, void *handler_state)
   	 * the CPU datasheet and Table 11. Alternate Function
   	 */
 	rcc_periph_clock_enable(RCC_I2C1);
-	I2C_OAR1(I2C1) = addr << 1; /* Give ourselves an address */
+	/* Give ourselves a primary address */
+	I2C_OAR1(I2C1) = addr1 << 1; 
+	if (addr2 != 0) {
+		/* Set second address and turn on ENDUAL */
+		I2C_OAR2(I2C1) = addr2 << 1 | 1;
+	}
 
+	/* XXX master clock, not really needed by slave ? */
 	I2C_CCR(I2C1) = 0x8000 | (((fpclk * 5) / 6) & 0xfff);
 	I2C_TRISE(I2C1) = (fpclk + 1) & 0x3f;
+
 	/* This is required or we get bus errors intermittently */
 	I2C_FLTR(I2C1) = 15; /* max filtering */
 	
 	/* enable interrupts for events, tell it APB1 is set to 42 MHz */
 	I2C_CR2(I2C1) = I2C_CR2_ITEVTEN | I2C_CR2_ITERREN | 42;
-	/* enable interrupts from I2C */
-	nvic_enable_irq(NVIC_I2C1_EV_IRQ);
-	nvic_enable_irq(NVIC_I2C1_ER_IRQ);
-	I2C_CR1(I2C1) = I2C_CR1_ACK | I2C_CR1_PE; /* turn on the peripheral */
+
+	/*
+	 * Set up the handler(s) that will respond to I2C messages
+	 * coming in on this address.
+	 */
 	dev[0] = (i2c_handler_t *) malloc(sizeof(i2c_handler_t));
 	if (dev[0] == NULL) {
 		fprintf(stderr, "Unable to allocate handler\n");
 		return;
 	}
-	memcpy(dev[0], handler, sizeof(i2c_handler_t));
-	dev[0]->addr = addr;
-	dev[0]->mode = HANDLE_MODE_IDLE;
-	dev[0]->state = handler_state;
+	memcpy(dev[0], handler1, sizeof(i2c_handler_t));
+	dev[0]->addr = addr1;
+	dev[0]->state = handler1_state;
 	if (dev[0]->state == NULL) {
-		fprintf(stderr, "Missing handler state\n");
+		fprintf(stderr, "Missing handler 1 state\n");
+		free(dev[0]);
 		return;
 	}
+	if (addr2 != 0) {
+		dev[1] = (i2c_handler_t *) malloc(sizeof(i2c_handler_t));
+		if (dev[1] == NULL) {
+			fprintf(stderr, "Unable to allocate second handler\n");
+			free(dev[0]);
+			return;
+		}
+		memcpy(dev[1], handler2, sizeof(i2c_handler_t));
+		dev[1]->addr = addr2;
+		dev[1]->state = handler2_state;
+		if (dev[1] == NULL) {
+			fprintf(stderr, "Missing handler 2 state!\n");
+			free(dev[1]);
+			free(dev[0]);
+			return;
+		}
+	}
+
+	/* enable interrupts from I2C */
+	nvic_enable_irq(NVIC_I2C1_EV_IRQ);
+	nvic_enable_irq(NVIC_I2C1_ER_IRQ);
+	/* turn on the peripheral */
+	I2C_CR1(I2C1) = I2C_CR1_ACK | I2C_CR1_PE; 
 }
 

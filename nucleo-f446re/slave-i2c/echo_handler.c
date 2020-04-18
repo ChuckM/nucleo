@@ -60,7 +60,6 @@ const i2c_handler_t echo_handler = {
 	.start = echo_start,
 	.stop = echo_finish,
 	.addr = 0,
-	.mode = HANDLE_MODE_IDLE,
 	.state = NULL
 };
 

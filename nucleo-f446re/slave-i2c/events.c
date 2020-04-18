@@ -128,7 +128,7 @@ void
 sm_dump_state(void)
 {
 	char buf[60];
-	uart_puts("[ ");
+	uart_puts("\n\033[33;40;1m::start:: \033[0m");
 	while (sm_cur_event != sm_nxt_event) {
 		struct sm_event_t *ce;
 
@@ -139,63 +139,64 @@ sm_dump_state(void)
 				uart_puts(buf);
 				break;
 			case ADDR1_WRITE:
-				sprintf(buf,"ADDR1_WRITE<0x%02X>", ce->d);
+				sprintf(buf,"ADDR1_WRITE.%d<0x%02X>", ce->c, ce->d);
 				uart_puts(buf);
 				break;
 			case ADDR1_READ:
-				sprintf(buf,"ADDR1_READ<0x%02X>", ce->d);
+				sprintf(buf,"ADDR1_READ.%d<0x%02X>", ce->c, ce->d);
 				uart_puts(buf);
 				break;
 			case ADDR2_WRITE:
-				sprintf(buf,"ADDR2_WRITE<0x%02X>", ce->d);
+				sprintf(buf,"ADDR2_WRITE.%d<0x%02X>", ce->c, ce->d);
 				uart_puts(buf);
 				break;
 			case ADDR2_READ:
-				sprintf(buf,"ADDR2_READ<0x%02X>", ce->d);
+				sprintf(buf,"ADDR2_READ.%d<0x%02X>", ce->c, ce->d);
 				uart_puts(buf);
 				break;
 			case RECV_BYTE:
-				sprintf(buf,"RECV_BYTE%d<0x%02X>", ce->c, ce->d);
+				sprintf(buf,"RECV_BYTE.%d<0x%02X>", ce->c, ce->d);
 				uart_puts(buf);
 				break;
 			case SENT_BYTE:
-				sprintf(buf,"SENT_BYTE%d<0x%02X>", ce->c, ce->d);
+				sprintf(buf,"SENT_BYTE.%d<0x%02X>", ce->c, ce->d);
 				uart_puts(buf);
 				break;
 			case NAK:
-				sprintf(buf,"NAK%d", ce->c);
+				sprintf(buf,"NAK.%d", ce->c);
 				uart_puts(buf);
 				break;
 			case CALL:
 				uart_puts("CALL");
 				break;
 			case STOP:
-				uart_puts("STOP");
+				sprintf(buf,"STOP.%d", ce->c);
+				uart_puts(buf);
 				break;
 			case ERROR:
 				switch(ce->d) {
 					case SM_ERR_TIMEOUT:
-						sprintf(buf,"ERROR%d<TIMEOUT>", ce->c);
+						sprintf(buf,"ERROR.%d<TIMEOUT>", ce->c);
 						uart_puts(buf);
 						break;
 					case SM_ERR_ARLO:
-						sprintf(buf,"ERROR%d<ARLO>", ce->c);
+						sprintf(buf,"ERROR.%d<ARLO>", ce->c);
 						uart_puts(buf);
 						break;
 					case SM_ERR_OVERUNDERFLOW:
-						sprintf(buf,"ERROR%d<OVERUNDERFLOW>", ce->c);
+						sprintf(buf,"ERROR.%d<OVERUNDERFLOW>", ce->c);
 						uart_puts(buf);
 						break;
 					case SM_ERR_PEC:
-						sprintf(buf,"ERROR%d<PEC>", ce->c);
+						sprintf(buf,"ERROR.%d<PEC>", ce->c);
 						uart_puts(buf);
 						break;
 					case SM_ERR_BUSERROR:
-						sprintf(buf,"ERROR%d<BUSERROR>", ce->c);
+						sprintf(buf,"ERROR.%d<BUSERROR>", ce->c);
 						uart_puts(buf);
 						break;
 					default:
-						sprintf(buf,"ERROR%d<0x%02X>", ce->c, ce->d);
+						sprintf(buf,"ERROR.%d<0x%02X>", ce->c, ce->d);
 						uart_puts(buf);
 						break;
 				}
@@ -205,7 +206,7 @@ sm_dump_state(void)
 		if (sm_cur_event != sm_nxt_event) {
 			uart_puts(" => ");
 		} else {
-			uart_puts(" ]");
+			uart_puts("\033[33;40;1m ::end::\033[0m\n");
 		}
 	}
 }
