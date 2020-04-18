@@ -48,6 +48,15 @@
 #include "slave_i2c.h"
 
 /*
+ * This does state tracking in the driver. If you
+ * don't need it you can define LOG_STATE(x, y, z) to be 
+ * just blank (that will remove the calls from the code
+ * below). Without logging you don't need the events.[ch]
+ * files with the driver.
+ */
+#define LOG_STATE(x, y, z)	sm_log_state(x, y, z)
+
+/*
  * One handler for each address
  */
 static i2c_handler_t	*(dev[2]);
@@ -64,23 +73,23 @@ i2c1_er_isr(void)
 	sr1 = I2C_SR1(I2C1);
 
 	if ((sr1 & I2C_SR1_STOPF) != 0) {
-		sm_log_state(STOP, 0, 0);
+		LOG_STATE(STOP, 0, 0);
 		I2C_CR1(I2C1) |= I2C_CR1_STOP;
 		if ((sr1 & I2C_SR1_AF) != 0) {
-			sm_log_state(NAK, 1, 0);
+			LOG_STATE(NAK, 1, 0);
 		}
 		if (__i2c_h != NULL) {
 			(*__i2c_h->stop)(__i2c_h->state, 0);
 		}
 	}
 	if ((sr1 & I2C_SR1_TIMEOUT) != 0) {
-		sm_log_state(ERROR, 0, SM_ERR_TIMEOUT);
+		LOG_STATE(ERROR, 0, SM_ERR_TIMEOUT);
 		if (__i2c_h != NULL) {
 			(*__i2c_h->stop)(__i2c_h->state, SM_ERR_TIMEOUT);
 		}
 	}
 	if ((sr1 & I2C_SR1_OVR) != 0) {
-		sm_log_state(ERROR, 1, SM_ERR_OVERUNDERFLOW);
+		LOG_STATE(ERROR, 1, SM_ERR_OVERUNDERFLOW);
 		if (__i2c_h != NULL) {
 			(*__i2c_h->stop)(__i2c_h->state, SM_ERR_OVERUNDERFLOW);
 		}
@@ -93,19 +102,19 @@ i2c1_er_isr(void)
 	if ((sr1 & I2C_SR1_AF) != 0) {
 		I2C_SR1(I2C1) = I2C_SR1(I2C1) & ~(I2C_SR1_AF);
 		if (__i2c_h) {
-			sm_log_state(NAK, 2, 0);
+			LOG_STATE(NAK, 2, 0);
 			(*__i2c_h->stop)(__i2c_h->state, 0);
 		} else {
-			sm_log_state(NAK, 3, 0);
+			LOG_STATE(NAK, 3, 0);
 		}
 		/* stop after no acknowledge (NAK) */
-		sm_log_state(STOP, 1, 0);
+		LOG_STATE(STOP, 1, 0);
 		I2C_CR1(I2C1) |= I2C_CR1_STOP;
 	}
 	/* Note this happens often if you don't have the noise filter set */
 	if ((sr1 & I2C_SR1_BERR) != 0) {
 		I2C_SR1(I2C1) = I2C_SR1(I2C1) & ~(I2C_SR1_BERR);
-		sm_log_state(ERROR, 2, SM_ERR_BUSERROR);
+		LOG_STATE(ERROR, 2, SM_ERR_BUSERROR);
 
 		if (__i2c_h) {
 			(*__i2c_h->stop)(__i2c_h->state, SM_ERR_BUSERROR);
@@ -164,7 +173,7 @@ i2c1_ev_isr(void)
 		i2c_event_t aa;
 		uint8_t	addr = 0xff;
 
-		/* This resets teh ADDR flag per the reference manual */
+		/* This resets the ADDR flag per the reference manual */
 		sr2 = I2C_SR2(I2C1);
 
 		/*
@@ -188,7 +197,7 @@ i2c1_ev_isr(void)
 			 * If the TRA bit is non zero we're transmitting 
 			 * data *to* the master
 			 */
-			sm_log_state(aa, 1, addr);
+			LOG_STATE(aa, 1, addr);
 			if (__i2c_h) {
 				(*__i2c_h->start)(__i2c_h->state, HANDLE_MODE_SENDING);
 			}
@@ -202,7 +211,7 @@ i2c1_ev_isr(void)
 				if (__i2c_h) {
 					db = (*__i2c_h->send)(__i2c_h->state);
 				}
-				sm_log_state(SENT_BYTE, 1, db); 
+				LOG_STATE(SENT_BYTE, 1, db); 
 				I2C1_DR = db; /* send the actual byte */
 			}
 		} else {
@@ -210,7 +219,7 @@ i2c1_ev_isr(void)
 			 * When the TRA bit is zero we're receiving
 			 * data *from* the master
 			 */
-			sm_log_state(aa, 1, addr);
+			LOG_STATE(aa, 1, addr);
 			if (__i2c_h) {
 				(*__i2c_h->start)(__i2c_h->state, HANDLE_MODE_RECEIVING);
 			}
@@ -227,13 +236,13 @@ i2c1_ev_isr(void)
 				db = I2C1_DR;
 				if (__i2c_h) {
 					(*__i2c_h->recv)(__i2c_h->state, db);
-					sm_log_state(RECV_BYTE, 1, db);
+					LOG_STATE(RECV_BYTE, 1, db);
 				}
 			} else {
 				if (__i2c_h) {
 					(*__i2c_h->stop)(__i2c_h->state, SM_ERR_TIMEOUT);
 				}
-				sm_log_state(ERROR, 3, SM_ERR_TIMEOUT);
+				LOG_STATE(ERROR, 3, SM_ERR_TIMEOUT);
 			}
 		}
 	}
@@ -253,10 +262,10 @@ i2c1_ev_isr(void)
 			if (__i2c_h) {
 				(*__i2c_h->recv)(__i2c_h->state, db);
 			}
-			sm_log_state(RECV_BYTE, 2, db);
+			LOG_STATE(RECV_BYTE, 2, db);
 		}
 
-		sm_log_state(STOP, 2, 0);
+		LOG_STATE(STOP, 2, 0);
 		if (__i2c_h) {
 			(*__i2c_h->stop)(__i2c_h->state, 0);
 		}
@@ -278,13 +287,13 @@ i2c1_ev_isr(void)
 			if (__i2c_h) {
 				(*__i2c_h->recv)(__i2c_h->state, db);
 			}
-			sm_log_state(RECV_BYTE, 3, db);
+			LOG_STATE(RECV_BYTE, 3, db);
 		} else if ((sr1 & I2C_SR1_TxE) != 0) {
 			db = 0xff;
 			if (__i2c_h) {
 				db = (*__i2c_h->send)(__i2c_h->state);
 			}
-			sm_log_state(SENT_BYTE, 2, db);
+			LOG_STATE(SENT_BYTE, 2, db);
 			I2C1_DR = db;
 		}
 	}
