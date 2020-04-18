@@ -63,7 +63,10 @@ static i2c_handler_t	*(dev[2]);
 void
 i2c1_er_isr(void)
 {
-	uint16_t sr1 = I2C_SR1(I2C1);
+	i2c_handler_t	*h;
+	uint16_t sr1, sr2;
+
+	sr1 = I2C_SR1(I2C1);
 
 	if ((sr1 & I2C_SR1_STOPF) != 0) {
 		sm_log_state(STOP, 0, 0);
@@ -83,8 +86,14 @@ i2c1_er_isr(void)
 	 */
 	if ((sr1 & I2C_SR1_AF) != 0) {
 		I2C_SR1(I2C1) = I2C_SR1(I2C1) & ~(I2C_SR1_AF);
-		sm_log_state(NAK, 2, 0);
-
+		sr2 = I2C1_SR2;
+		h = ((sr2 & I2C_SR2_DUALF) == 0) ? dev[0] : dev[1];
+		if (h) {
+			sm_log_state(NAK, 2, 0);
+			(*h->stop)(h->state, 0);
+		} else {
+			sm_log_state(NAK, 3, 0);
+		}
 		/* stop after no acknowledge (NAK) */
 		sm_log_state(STOP, 0, 0);
 		I2C_CR1(I2C1) |= I2C_CR1_STOP;

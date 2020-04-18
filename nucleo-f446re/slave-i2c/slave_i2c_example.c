@@ -191,7 +191,8 @@ main(void)
 
 		printf("Test Menu:\n");
 		printf("\t1: Echo Test (echos back what is written)\n");
-		printf("\t2: 'Register' - simulates 16 R/W 16 bit registers\n");
+		printf("\t2: DisplayEMU - simulates a 16 x 2 character display\n");
+		printf("\t3: Protocol - dumps protocol messages\n");
 		printf("Enter test #: ");
 		fflush(stdout);
 		uart_gets(buf, 20);
