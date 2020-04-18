@@ -1,6 +1,10 @@
 /*
  * Emulated Display Handler -- Definitions
  *
+ * These are the definitions used by the emulated display handler.
+ * The primary one of interest is MAX_ROWS and MAX_COLS. Only tested
+ * at 2 x 16 for ROWS and COLUMNS.
+ *
  * BSD 2-Clause License
  * 
  * Copyright (C) 2013-2020 Chuck McManis <cmcmanis@mcmanis.com>

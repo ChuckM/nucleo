@@ -1,6 +1,11 @@
 /*
  * events.h - definitions for the i2c event logger
  *
+ * The events logger keeps a running stream of things that
+ * were logged by the driver. This can illuminate control flow
+ * through the slave driver and also be used to debug i2c calls
+ * from master devices.
+ *
  * BSD 2-Clause License
  * 
  * Copyright (C) 2013-2020 Chuck McManis <cmcmanis@mcmanis.com>

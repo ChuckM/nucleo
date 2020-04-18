@@ -1,6 +1,16 @@
 /*
  * Slave i2c handler defines
  *
+ * Defines for i2c device handlers. A device handler implements a specific
+ * set of semantics for the slave device (i2c has no default semantics of
+ * its own). Two examples are provided, one called "echo" and one called "emd."
+ *
+ * Echo simple echos back bytes that were written to the device. 
+ *
+ * EMD is an emulated character display. It has 8 "registers" that do various
+ * things and a display state. It represents how you would implement a more
+ * complex set of device semantics.
+ *
  * BSD 2-Clause License
  * 
  * Copyright (C) 2013-2020 Chuck McManis <cmcmanis@mcmanis.com>
