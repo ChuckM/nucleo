@@ -35,7 +35,7 @@
 /*
  * Clock setup and use API
  */
-void nucleo_clock_setup(void);
+void nucleo_clock_setup(uint8_t enable_systick);
 void msleep(uint32_t delay);
 uint32_t mtime(void);
 unsigned char *time_string(uint32_t t);

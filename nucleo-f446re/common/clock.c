@@ -9,8 +9,8 @@
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
  * 
- * 1. Redistributions of source code must retain the above copyright notice, this
- *    list of conditions and the following disclaimer.
+ * 1. Redistributions of source code must retain the above copyright notice,
+ *    this list of conditions and the following disclaimer.
  * 
  * 2. Redistributions in binary form must reproduce the above copyright notice,
  *    this list of conditions and the following disclaimer in the documentation
@@ -18,15 +18,17 @@
  * 
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
- * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
- * DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
- * FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
- * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
- * SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
- * CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
- * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
- * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR 
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS 
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
  */
+
 #include <libopencm3/stm32/rcc.h>
 #include <libopencm3/stm32/gpio.h>
 #include <libopencm3/stm32/pwr.h>
@@ -62,6 +64,8 @@ static const struct rcc_clock_scale nucleo_446_clk_params = {
 	.apb2_frequency = 84000000,
 };
 
+static uint8_t __clock_systick_enabled = 0;
+
 /*
  * This define causes code to be included that toggles the pin PC3
  * when the SysTick interrupt is called. The purpose of that test is
@@ -83,25 +87,25 @@ systick_setup(int tick_rate)
     systick_set_reload(168000000 / tick_rate);
 	systick_clear();
 	systick_counter_enable();
+	__clock_systick_enabled++;
     /* this done last */
     systick_interrupt_enable();
 }
 
 /*
  * And this is the utility function, set up the clock for the
- * desired frequency and enable the SysTick counter to give
+ * desired frequency.
+ *
+ * It also can optionally enable the SysTick counter to give
  * 1mS system "ticks" (1000 Hz).
  */
 void
-nucleo_clock_setup(void) {
+nucleo_clock_setup(uint8_t enable_systick) {
 	
-#ifdef TEST_PIN
-	/* set up the test pin if requested */
-	rcc_periph_clock_enable(RCC_GPIOC);
-	gpio_mode_setup(GPIOC, GPIO_MODE_OUTPUT, GPIO_PUPD_NONE, GPIO3);
-#endif
 	rcc_clock_setup_pll(&nucleo_446_clk_params);
-	systick_setup(1000);
+	if (enable_systick) {
+		systick_setup(1000);
+	}
 	return;
 }
 
@@ -126,17 +130,16 @@ sys_tick_handler(void) {
 	if (delay_millis) {
 		delay_millis--;
 	}
-#ifdef TEST_PIN
-	/* toggle the test pin if requested */
-	gpio_toggle(GPIOC, GPIO3);
-#endif
-
 }
 
 /* sleep for delay milliseconds */
 void
 msleep(uint32_t delay)
 {
+	/* This may want to use a timer instead if SysTick is not available */
+	if (__clock_systick_enabled == 0) {
+		return;
+	}
 	delay_millis = delay;
     while (delay_millis) ;
 }
@@ -146,41 +149,4 @@ uint32_t
 mtime()
 {
     return system_millis;
-}
-
-/*
- * time_string(uint32_t)
- *
- * Convert a number representing milliseconds into a 'time' string
- * of HHH:MM:SS.mmm where HHH is hours, MM is minutes, SS is seconds
- * and .mmm is fractions of a second.
- *
- * Uses a static buffer (not multi-thread friendly)
- */
-unsigned char *
-time_string(uint32_t t)
-{
-    static unsigned char time_string[14];
-    uint16_t msecs = t % 1000;
-    uint8_t secs = (t / 1000) % 60;
-    uint8_t mins = (t / 60000) % 60;
-    uint16_t hrs = (t /3600000);
-
-    // HH:MM:SS.mmm\0
-    // 0123456789abc
-    time_string[0] = (hrs / 100) % 10 + '0';
-    time_string[1] = (hrs / 10) % 10 + '0';
-    time_string[2] = hrs % 10 + '0';
-    time_string[3] = ':';
-    time_string[4] = (mins / 10)  % 10 + '0';
-    time_string[5] = mins % 10 + '0';
-    time_string[6] = ':';
-    time_string[7] = (secs / 10)  % 10 + '0';
-    time_string[8] = secs % 10 + '0';
-    time_string[9] = '.';
-    time_string[10] = (msecs / 100) % 10 + '0';
-    time_string[11] = (msecs / 10) % 10 + '0';
-    time_string[12] = msecs % 10 + '0';
-    time_string[13] = 0;
-    return &time_string[0];
 }

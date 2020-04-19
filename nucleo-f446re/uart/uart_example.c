@@ -43,7 +43,7 @@ main(void)
      * Clock setup must happen first so that the UART code can calculate
      * the correct divisor for the baudrate.
      */
-	nucleo_clock_setup();
+	nucleo_clock_setup(1);
 	/*
 	 * Set up the the UART but note that not all ST-LINK versions can reliably
 	 * do 115,200 baud, you may need to lower it to 57600 to get reliable

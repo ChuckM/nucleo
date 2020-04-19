@@ -151,7 +151,7 @@ main(void)
 	struct echo_state_t *echo;
 	struct emd_state_t *emd;
 
-	nucleo_clock_setup();
+	nucleo_clock_setup(1);
 	uart_setup(115200);
 	led_setup();
 	echo = echo_init(256);
