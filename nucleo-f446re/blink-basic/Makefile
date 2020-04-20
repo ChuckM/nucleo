@@ -2,7 +2,7 @@
 # Blinker
 #
 
-BINARY = blink
+BINARY = blink-basic
 
 DEVICE = STM32F446RE
 
