@@ -1,6 +1,6 @@
 OBJS = ../common/clock.o
 
-BINARY = blink_tick
+BINARY = blink-tick
 
 DEVICE = STM32F446RE
 

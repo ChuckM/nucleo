@@ -37,7 +37,7 @@
 int
 main(void)
 {
-	nucleo_clock_setup();
+	nucleo_clock_setup(1);
 	led_setup();
 	while (1) {
 		led_toggle();
