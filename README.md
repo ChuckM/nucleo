@@ -9,7 +9,7 @@ and
 
 They have a couple of nice features, first they include a programming and debug
 module that is "attached" and second they have an Arduino compatible set
-of sheild pins which allows them to work with a number of pre-existing shields.
+of shield pins which allows them to work with a number of pre-existing shields.
 ST sells their own shields of course but there are not very many of them.
 
 These boards support the [Mbed](https://os.mbed.com/) environment right out 
