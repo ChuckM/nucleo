@@ -1,4 +1,4 @@
-# Blink Example #2: Systick Based Blink
+# Blink Example : Blinking Using Systick
 
 This example is the simplest example of using just the helper code
 `nucleo_clock_setup` which sets the Nucleo board to run at 168 MHz

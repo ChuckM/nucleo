@@ -1,4 +1,4 @@
-# Blink Example #1 : Bare bones blinking
+# Blink Example : Bare bones blinking
 
 This is the simplest version in the family of Blink examples. It does nothing
 but spin wait with NOPs to waste time. As a result it can be challenging to

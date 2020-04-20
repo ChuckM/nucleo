@@ -1,4 +1,4 @@
-# Timer Based Blink
+# Blink example : Timer Based Blinking
 
 Another way to get a more precise blink rate on your LED is to use one of
 the timers in the chip.
