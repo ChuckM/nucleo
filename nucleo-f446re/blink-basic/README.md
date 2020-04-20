@@ -12,7 +12,8 @@ with respect to the programs logical flow.
 
 The family of Blink examples are as follows:
 
-  * **blink** -- This one, which uses a for loop with a nested NOP for its delay.
+  * **blink-basic** -- This one, which uses a for loop with a nested NOP for
+    its delay.
   * **blink-tick** -- Which takes advantage of the SysTick timer and interrupt
     service routine that is set up in the `clock.c`
   * **blink-timer** -- Which avoids the use of interrupts by using one of the
