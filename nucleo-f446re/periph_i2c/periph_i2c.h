@@ -2,7 +2,7 @@
  * Slave i2c handler defines
  *
  * Defines for i2c device handlers. A device handler implements a specific
- * set of semantics for the slave device (i2c has no default semantics of
+ * set of semantics for the periphereal device (i2c has no default semantics of
  * its own). Two examples are provided, one called "echo" and one called "emd."
  *
  * Echo simple echos back bytes that were written to the device. 
@@ -59,7 +59,7 @@ typedef struct {
 #define SI2C_RETURN_MISSING_H1_STATE	-2
 #define SI2C_RETURN_MISSING_H2_STATE	-3
 
-/* setup the slave I2C interface, returns 0 on success < 0 on failure */
+/* setup the peripheral I2C interface, returns 0 on success < 0 on failure */
 int setup_i2c(uint8_t addr1, const i2c_handler_t *h1, void *h1_state,
 			   uint8_t addr2, const i2c_handler_t *h2, void *h2_state);
 

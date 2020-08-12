@@ -1,7 +1,8 @@
-# I2C Slave Driver Example
+# I2C Peripheral Driver Example
 
-This is an I2C slave driver. Full documentation will be on my web site shortly
-but if you want to play with it connect to the nucleo's serial port with
+This is an I2C peripheral driver. Full documentation will be on my web
+site shortly but if you want to play with it connect to the nucleo's
+serial port with
 an ANSI compatible terminal program (Hyperterm, Putty, GNU screen, Etc.)
 and start the program. It implements two i2c addresses.
 

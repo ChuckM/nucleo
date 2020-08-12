@@ -1,13 +1,13 @@
 /*
- * Echo handler - An i2c handler driver for slave devices
+ * Echo handler - An i2c handler driver for peripheral devices
  *
  * This simple handler stores bytes that are written to the device
  * and returns them when the device is read.
  *
- * Much like USB devices, when you're the slave you don't get to drive.
+ * Much like USB devices, when you're the peripheral you don't get to drive.
  * Writing code to support that can be a bit tricky. I've chosen to
  * create the notion of a 'handler' which can be plugged into the
- * i2c slave driver and together they give you some feature. The
+ * i2c peripheral driver and together they give you some feature. The
  * goal is maximum code re-use.
  *
  * BSD 2-Clause License
@@ -42,7 +42,7 @@
 #include <stdlib.h>
 #include <stdint.h>
 #include "ring.h"
-#include "slave_i2c.h"
+#include "periph_i2c.h"
 #include "echo_handler.h"
 
 static void echo_start(void *state, uint8_t rw);

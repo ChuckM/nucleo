@@ -34,7 +34,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include "slave_i2c.h"
+#include "periph_i2c.h"
 #include "emdisplay_handler.h"
 #include "../common.h"
 

@@ -1,7 +1,7 @@
 /*
- * I2C Slave Device Driver
+ * I2C Peripheral Device Driver
  *
- * This is an interrupt driven I2C driver that runs as a slave. Using it
+ * This is an interrupt driven I2C driver that runs as a peripheral. Using it
  * consists of linking to this file and one or more handler files. The
  * interface is initialized with an address and an associated handler
  * and then started. 
@@ -45,7 +45,7 @@
 #include <libopencm3/stm32/gpio.h>
 #include <libopencm3/cm3/nvic.h>
 #include "events.h"
-#include "slave_i2c.h"
+#include "periph_i2c.h"
 
 /*
  * This does state tracking in the driver. If you
@@ -301,7 +301,7 @@ i2c1_ev_isr(void)
 
 
 /*
- * Set up an I2C device as a slave with the passed in address.
+ * Set up an I2C device as a peripheral with the passed in address.
  * We're going to use the pins on the Arduino connector labeled
  * as SCA/D14 and SCL/D15 which are associated with PB8 (SCA) and
  * PB9 (SCL).
@@ -335,7 +335,7 @@ setup_i2c(uint8_t addr1, const i2c_handler_t *handler1, void *handler1_state,
 		I2C_OAR2(I2C1) = addr2 << 1 | 1;
 	}
 
-	/* XXX master clock, not really needed by slave ? */
+	/* XXX master clock */
 	I2C_CCR(I2C1) = 0x8000 | (((fpclk * 5) / 6) & 0xfff);
 	I2C_TRISE(I2C1) = (fpclk + 1) & 0x3f;
 

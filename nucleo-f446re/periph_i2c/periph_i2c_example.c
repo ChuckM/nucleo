@@ -1,5 +1,5 @@
 /*
- * Example of setting up a slave I2C device
+ * Example of setting up a peripheral I2C device
  *
  * I use this to talk to a Wemos D1 (ESP8266 board), more like it talks to
  * me and then I tell it I have something to say and it asks me to pass
@@ -41,7 +41,7 @@
 #include "../common.h"
 #include "ring.h"
 #include "events.h"
-#include "slave_i2c.h"
+#include "periph_i2c.h"
 #include "echo_handler.h"
 #include "emdisplay_handler.h"
 #include <libopencm3/stm32/rcc.h>

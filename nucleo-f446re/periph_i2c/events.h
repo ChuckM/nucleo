@@ -3,7 +3,7 @@
  *
  * The events logger keeps a running stream of things that
  * were logged by the driver. This can illuminate control flow
- * through the slave driver and also be used to debug i2c calls
+ * through the peripheral driver and also be used to debug i2c calls
  * from master devices.
  *
  * BSD 2-Clause License

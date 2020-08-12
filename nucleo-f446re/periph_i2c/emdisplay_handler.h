@@ -35,7 +35,7 @@
 
 #pragma once
 #include <stdint.h>
-#include "slave_i2c.h"
+#include "periph_i2c.h"
 
 struct emd_state_t {
 	uint8_t		*display;		/* Display contents */
