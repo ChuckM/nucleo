@@ -4,4 +4,4 @@ BINARY = blink-helper
 
 DEVICE = STM32F103RB
 
-include ../../Makefile.include
+include ../../rules.mk
