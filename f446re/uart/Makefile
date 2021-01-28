@@ -4,4 +4,5 @@ BINARY = uart_example
 
 DEVICE = STM32F446RE
 
-include ../../Makefile.include
+include ../../rules.mk
+

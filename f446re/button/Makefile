@@ -4,5 +4,5 @@ BINARY = button
 
 DEVICE = STM32F446RE
 
-include ../../Makefile.include
+include ../../rules.mk
 
